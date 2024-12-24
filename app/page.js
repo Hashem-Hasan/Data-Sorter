@@ -27,24 +27,19 @@ export default function Home() {
   // -------------------------
   // State Hooks
   // -------------------------
-  // Original user data (as JSON string for editable input)
-  const [users, setUsers] = useState("[]");
-  // Sorted data
-  const [sortedData, setSortedData] = useState([]);
-  // Sorting key
-  const [sortKey, setSortKey] = useState("weight");
-  // Overweight percentage
+  const [users, setUsers] = useState("[]");        // JSON string of user data
+  const [sortedData, setSortedData] = useState([]); // Holds sorted user data
+  const [sortKey, setSortKey] = useState("weight"); // "weight" or "height"
   const [overweightPercentage, setOverweightPercentage] = useState(0);
-  // Show overweight section
   const [showOverweight, setShowOverweight] = useState(false);
-  // Which code tooltip to show: "js" or "cpp"
-  const [showCodeTooltip, setShowCodeTooltip] = useState<null | "js" | "cpp">(null);
-  // Loading and error states
+  // Which code tooltip to show: null, "js", or "cpp"
+  const [showCodeTooltip, setShowCodeTooltip] = useState(null);
+  
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // -------------------------
-  // useEffect to fetch data
+  // Fetch Data on Mount
   // -------------------------
   useEffect(() => {
     const fetchData = async () => {
@@ -54,13 +49,13 @@ export default function Home() {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
         const data = await response.json();
-        // Convert to JSON string for editable textarea
+
+        // Convert to JSON string for the editable textarea
         setUsers(JSON.stringify(data.users, null, 2));
         setIsLoading(false);
-        // Initially, do not show overweight percentage
-        setShowOverweight(false);
-      } catch (error) {
-        console.error("Error fetching users:", error);
+        setShowOverweight(false); // Hide overweight info initially
+      } catch (err) {
+        console.error("Error fetching users:", err);
         setError("Failed to fetch user data. Please try again later.");
         setIsLoading(false);
       }
@@ -70,25 +65,16 @@ export default function Home() {
   }, []);
 
   // -------------------------
-  // Selection Sort Function
+  // Selection Sort
   // -------------------------
   /**
-   * selectionSort
-   * -------------
-   * Sorts an array of objects by a given numeric key
-   * using the Selection Sort algorithm.
-   *
-   * @param {Array} array - The array to sort.
-   * @param {String} key - The property name to sort by (e.g., "weight" or "height").
-   * @returns {Array} - A new sorted array.
+   * Sorts an array of objects by a numeric key ("weight" or "height").
    */
   const selectionSort = (array, key) => {
     const arr = [...array];
-
     for (let i = 0; i < arr.length - 1; i++) {
       let minIndex = i;
       for (let j = i + 1; j < arr.length; j++) {
-        // Ensure comparison is numeric
         if (Number(arr[j][key]) < Number(arr[minIndex][key])) {
           minIndex = j;
         }
@@ -101,24 +87,15 @@ export default function Home() {
   };
 
   // -------------------------
-  // Overweight Percentage
+  // Overweight Calculation
   // -------------------------
   /**
-   * calculateOverweightPercentage
-   * -----------------------------
-   * Calculates the percentage of users who are considered overweight.
-   * We define "overweight" by the standard BMI >= 25.
-   *
-   * BMI = weight(kg) / ((height(cm) / 100) * (height(cm) / 100))
-   * Overweight if BMI >= 25
-   *
-   * @param {Array} usersList - The users data array.
+   * Calculates percentage of users with BMI >= 25.
    */
   const calculateOverweightPercentage = (usersList) => {
     if (!usersList?.length) return;
 
     let overweightCount = 0;
-
     usersList.forEach((user) => {
       const heightInMeters = user.height / 100;
       const bmi = user.weight / (heightInMeters * heightInMeters);
@@ -132,19 +109,19 @@ export default function Home() {
   };
 
   // -------------------------
-  // Handle Sort Function
+  // Handle Sort
   // -------------------------
   const handleSort = () => {
     try {
-      const parsedData = JSON.parse(users);
+      const parsedData = JSON.parse(users);  // users is a JSON string
       const sorted = selectionSort(parsedData, sortKey);
       setSortedData(sorted);
       calculateOverweightPercentage(sorted);
-      setShowOverweight(true); // Show overweight percentage after sorting
-      setError(null); // Clear any previous errors
-    } catch (error) {
+      setShowOverweight(true);
+      setError(null); // Clear any old error
+    } catch (err) {
       alert("Invalid JSON data. Please correct it before sorting.");
-      console.error("Error parsing JSON:", error);
+      console.error("Error parsing JSON:", err);
       setError("Invalid JSON format. Please ensure the data is correctly formatted.");
     }
   };
@@ -246,7 +223,7 @@ int main() {
 `;
 
   // -------------------------
-  // Render User Information
+  // Render User Table
   // -------------------------
   const renderUserTable = (data) => {
     return (
@@ -262,9 +239,9 @@ int main() {
             </tr>
           </thead>
           <tbody>
-            {data.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-100">
-                <td className="py-2 px-4 border-b">{`${user.firstName} ${user.lastName}`}</td>
+            {data.map((user, idx) => (
+              <tr key={idx} className="hover:bg-gray-100">
+                <td className="py-2 px-4 border-b">{user.firstName} {user.lastName}</td>
                 <td className="py-2 px-4 border-b">{user.email}</td>
                 <td className="py-2 px-4 border-b">{user.weight}</td>
                 <td className="py-2 px-4 border-b">{user.height}</td>
@@ -277,6 +254,9 @@ int main() {
     );
   };
 
+  // -------------------------
+  // Component Render
+  // -------------------------
   return (
     <div className="min-h-screen bg-white text-black p-6">
       {/* Header */}
@@ -360,8 +340,9 @@ int main() {
               value={users}
               onChange={(e) => setUsers(e.target.value)}
               placeholder="Edit JSON data here..."
-            ></textarea>
+            />
           )}
+
           <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
             <label htmlFor="sortKey" className="text-lg font-medium">
               Sort By:
