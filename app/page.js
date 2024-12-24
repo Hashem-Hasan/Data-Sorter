@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Documentation from "./components/Documentation"; // Corrected import path
+import Documentation from "./components/Documentation";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -37,11 +37,10 @@ export default function Home() {
   const [overweightPercentage, setOverweightPercentage] = useState(0);
   // Show overweight section
   const [showOverweight, setShowOverweight] = useState(false);
-  // Show tooltip for code
-  const [showCode, setShowCode] = useState(false);
-  // Loading state
+  // Which code tooltip to show: "js" or "cpp"
+  const [showCodeTooltip, setShowCodeTooltip] = useState<null | "js" | "cpp">(null);
+  // Loading and error states
   const [isLoading, setIsLoading] = useState(true);
-  // Error state
   const [error, setError] = useState(null);
 
   // -------------------------
@@ -88,14 +87,12 @@ export default function Home() {
 
     for (let i = 0; i < arr.length - 1; i++) {
       let minIndex = i;
-
       for (let j = i + 1; j < arr.length; j++) {
         // Ensure comparison is numeric
         if (Number(arr[j][key]) < Number(arr[minIndex][key])) {
           minIndex = j;
         }
       }
-
       if (minIndex !== i) {
         [arr[i], arr[minIndex]] = [arr[minIndex], arr[i]];
       }
@@ -112,7 +109,7 @@ export default function Home() {
    * Calculates the percentage of users who are considered overweight.
    * We define "overweight" by the standard BMI >= 25.
    *
-   * BMI = weight(kg) / ( (height(cm)/100) * (height(cm)/100) )
+   * BMI = weight(kg) / ((height(cm) / 100) * (height(cm) / 100))
    * Overweight if BMI >= 25
    *
    * @param {Array} usersList - The users data array.
@@ -125,7 +122,6 @@ export default function Home() {
     usersList.forEach((user) => {
       const heightInMeters = user.height / 100;
       const bmi = user.weight / (heightInMeters * heightInMeters);
-
       if (bmi >= 25) {
         overweightCount++;
       }
@@ -167,26 +163,87 @@ export default function Home() {
     ],
   };
 
-  // JavaScript Code to Display on Hover
-  const javascriptCode = `// Selection Sort Function
+  // -------------------------
+  // Code Snippets
+  // -------------------------
+  const jsCode = `// Selection Sort Function (JavaScript)
 const selectionSort = (array, key) => {
   const arr = [...array];
 
   for (let i = 0; i < arr.length - 1; i++) {
     let minIndex = i;
-
     for (let j = i + 1; j < arr.length; j++) {
       if (Number(arr[j][key]) < Number(arr[minIndex][key])) {
         minIndex = j;
       }
     }
-
     if (minIndex !== i) {
       [arr[i], arr[minIndex]] = [arr[minIndex], arr[i]];
     }
   }
   return arr;
 };`;
+
+  const cppCode = `#include <iostream>
+#include <vector>
+#include <string>
+using namespace std;
+
+struct User {
+    string firstName;
+    string lastName;
+    string email;
+    double weight; 
+    double height;
+    string country;
+};
+
+// Selection Sort for weight or height
+void selectionSort(vector<User> &arr, const string &key) {
+    for (int i = 0; i < (int)arr.size() - 1; i++) {
+        int minIndex = i;
+        for (int j = i + 1; j < (int)arr.size(); j++) {
+            double valJ = (key == "weight") ? arr[j].weight : arr[j].height;
+            double valMin = (key == "weight") ? arr[minIndex].weight : arr[minIndex].height;
+
+            if (valJ < valMin) {
+                minIndex = j;
+            }
+        }
+        if (minIndex != i) {
+            User temp = arr[i];
+            arr[i] = arr[minIndex];
+            arr[minIndex] = temp;
+        }
+    }
+}
+
+int main() {
+    // Example fake data
+    vector<User> users = {
+        {"John", "Doe", "john.doe@example.com", 75.0, 180.0, "USA"},
+        {"Jane", "Smith", "jane.smith@example.com", 62.0, 165.0, "UK"},
+        {"Michael", "Brown", "michael.brown@example.com", 90.0, 185.0, "Canada"},
+        {"Emily", "Johnson", "emily.johnson@example.com", 68.5, 158.0, "Australia"},
+        {"Daniel", "Lee", "daniel.lee@example.com", 85.2, 176.0, "Germany"}
+    };
+
+    // Sort by weight (change to "height" if needed)
+    selectionSort(users, "weight");
+
+    // Print sorted data
+    cout << "Sorted by weight:\\n";
+    for (auto &u : users) {
+        cout << u.firstName << " " << u.lastName
+             << ", Email: " << u.email
+             << ", Weight: " << u.weight
+             << ", Height: " << u.height
+             << ", Country: " << u.country << "\\n";
+    }
+
+    return 0;
+}
+`;
 
   // -------------------------
   // Render User Information
@@ -224,33 +281,61 @@ const selectionSort = (array, key) => {
     <div className="min-h-screen bg-white text-black p-6">
       {/* Header */}
       <motion.div
-        className="text-center items-center flex flex-col   justify-center mb-12 relative "
+        className="text-center items-center flex flex-col justify-center mb-12 relative"
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
         <h1 className="text-4xl font-extrabold">Hashem Hasan Data Sorter</h1>
-        <div
-          className="text-lg mt-2 cursor-pointer relative"
-          onMouseEnter={() => setShowCode(true)}
-          onMouseLeave={() => setShowCode(false)}
-        >
-          <span className="underline">Used JavaScript Code</span>
-          <AnimatePresence>
-            {showCode && (
-              <motion.div
-                className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-[600px] bg-gray-800 text-left text-white p-4 rounded-lg shadow-lg z-10"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-              >
-                <pre className="text-sm overflow-auto max-h-64">
-                  <code>{javascriptCode}</code>
-                </pre>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
+        <div className="flex gap-4 mt-4">
+          {/* View JavaScript Code */}
+          <div
+            className="text-lg cursor-pointer relative underline"
+            onMouseEnter={() => setShowCodeTooltip("js")}
+            onMouseLeave={() => setShowCodeTooltip(null)}
+          >
+            <span>View JavaScript Code</span>
+            <AnimatePresence>
+              {showCodeTooltip === "js" && (
+                <motion.div
+                  className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-[600px] bg-gray-800 text-left text-white p-4 rounded-lg shadow-lg z-10"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <pre className="text-sm overflow-auto max-h-64">
+                    <code>{jsCode}</code>
+                  </pre>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* View C++ Code */}
+          <div
+            className="text-lg cursor-pointer relative underline"
+            onMouseEnter={() => setShowCodeTooltip("cpp")}
+            onMouseLeave={() => setShowCodeTooltip(null)}
+          >
+            <span>View C++ Code</span>
+            <AnimatePresence>
+              {showCodeTooltip === "cpp" && (
+                <motion.div
+                  className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-[600px] bg-gray-800 text-left text-white p-4 rounded-lg shadow-lg z-10"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <pre className="text-sm overflow-auto max-h-64">
+                    <code>{cppCode}</code>
+                  </pre>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </motion.div>
 
