@@ -1,4 +1,2 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {};
-
-export default nextConfig;
+const config = { poweredByHeader: false, experimental: { cpus: 2 } };
+export default config;

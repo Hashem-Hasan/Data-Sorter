@@ -1,431 +1,367 @@
-// pages/index.js
-
-"use client";
-
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import Documentation from "./components/Documentation";
-import { Bar } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  Legend,
-} from "chart.js";
-
-// Register Chart.js components
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
-
-/**
- * -------------------------------------------
- *  "Hashem Hasan Data Sorter"
- * -------------------------------------------
- */
+'use client';
+import { useMemo, useRef, useState } from 'react';
+import Icon from './components/Icon';
+import { SAMPLE, parseData, sortRows, uniqueRows, toCSV, display } from '../lib/data.mjs';
 export default function Home() {
-  // -------------------------
-  // State Hooks
-  // -------------------------
-  const [users, setUsers] = useState("[]");        // JSON string of user data
-  const [sortedData, setSortedData] = useState([]); // Holds sorted user data
-  const [sortKey, setSortKey] = useState("weight"); // "weight" or "height"
-  const [overweightPercentage, setOverweightPercentage] = useState(0);
-  const [showOverweight, setShowOverweight] = useState(false);
-  // Which code tooltip to show: null, "js", or "cpp"
-  const [showCodeTooltip, setShowCodeTooltip] = useState(null);
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // -------------------------
-  // Fetch Data on Mount
-  // -------------------------
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("https://dummyjson.com/users");
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json();
-
-        // Convert to JSON string for the editable textarea
-        setUsers(JSON.stringify(data.users, null, 2));
-        setIsLoading(false);
-        setShowOverweight(false); // Hide overweight info initially
-      } catch (err) {
-        console.error("Error fetching users:", err);
-        setError("Failed to fetch user data. Please try again later.");
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  // -------------------------
-  // Selection Sort
-  // -------------------------
-  /**
-   * Sorts an array of objects by a numeric key ("weight" or "height").
-   */
-  const selectionSort = (array, key) => {
-    const arr = [...array];
-    for (let i = 0; i < arr.length - 1; i++) {
-      let minIndex = i;
-      for (let j = i + 1; j < arr.length; j++) {
-        if (Number(arr[j][key]) < Number(arr[minIndex][key])) {
-          minIndex = j;
-        }
-      }
-      if (minIndex !== i) {
-        [arr[i], arr[minIndex]] = [arr[minIndex], arr[i]];
-      }
-    }
-    return arr;
-  };
-
-  // -------------------------
-  // Overweight Calculation
-  // -------------------------
-  /**
-   * Calculates percentage of users with BMI >= 25.
-   */
-  const calculateOverweightPercentage = (usersList) => {
-    if (!usersList?.length) return;
-
-    let overweightCount = 0;
-    usersList.forEach((user) => {
-      const heightInMeters = user.height / 100;
-      const bmi = user.weight / (heightInMeters * heightInMeters);
-      if (bmi >= 25) {
-        overweightCount++;
-      }
-    });
-
-    const percentage = (overweightCount / usersList.length) * 100;
-    setOverweightPercentage(percentage.toFixed(2));
-  };
-
-  // -------------------------
-  // Handle Sort
-  // -------------------------
-  const handleSort = () => {
+  const [source, setSource] = useState(JSON.stringify(SAMPLE, null, 2)),
+    [dataset, setDataset] = useState({ rows: SAMPLE, columns: Object.keys(SAMPLE[0]) });
+  const [key, setKey] = useState('budget'),
+    [direction, setDirection] = useState('desc'),
+    [algorithm, setAlgorithm] = useState('native'),
+    [query, setQuery] = useState(''),
+    [dedupe, setDedupe] = useState(false),
+    [error, setError] = useState(''),
+    [note, setNote] = useState(
+      'Example project data loaded. Select a column heading to change the order.'
+    );
+  const file = useRef(null);
+  const result = useMemo(() => {
     try {
-      const parsedData = JSON.parse(users);  // users is a JSON string
-      const sorted = selectionSort(parsedData, sortKey);
-      setSortedData(sorted);
-      calculateOverweightPercentage(sorted);
-      setShowOverweight(true);
-      setError(null); // Clear any old error
-    } catch (err) {
-      alert("Invalid JSON data. Please correct it before sorting.");
-      console.error("Error parsing JSON:", err);
-      setError("Invalid JSON format. Please ensure the data is correctly formatted.");
+      let rows = dedupe ? uniqueRows(dataset.rows) : dataset.rows;
+      if (query.trim())
+        rows = rows.filter((r) =>
+          Object.values(r).some((v) => display(v).toLowerCase().includes(query.toLowerCase()))
+        );
+      return { ...sortRows(rows, key, direction, algorithm), error: '' };
+    } catch (e) {
+      return { rows: [], comparisons: 0, error: e.message };
     }
-  };
-
-  // -------------------------
-  // Chart Data
-  // -------------------------
-  const chartData = {
-    labels: ["Overweight", "Normal"],
-    datasets: [
-      {
-        label: "% of Users",
-        data: [overweightPercentage, (100 - overweightPercentage).toFixed(2)],
-        backgroundColor: ["#f87171", "#60a5fa"],
-      },
-    ],
-  };
-
-  // -------------------------
-  // Code Snippets
-  // -------------------------
-  const jsCode = `// Selection Sort Function (JavaScript)
-const selectionSort = (array, key) => {
-  const arr = [...array];
-
-  for (let i = 0; i < arr.length - 1; i++) {
-    let minIndex = i;
-    for (let j = i + 1; j < arr.length; j++) {
-      if (Number(arr[j][key]) < Number(arr[minIndex][key])) {
-        minIndex = j;
-      }
-    }
-    if (minIndex !== i) {
-      [arr[i], arr[minIndex]] = [arr[minIndex], arr[i]];
+  }, [dataset, key, direction, algorithm, query, dedupe]);
+  const blanks = dataset.rows.reduce(
+    (n, row) => n + dataset.columns.filter((c) => row[c] == null || row[c] === '').length,
+    0
+  );
+  function apply(text = source) {
+    try {
+      const data = parseData(text);
+      setDataset(data);
+      setSource(text);
+      setKey(data.columns[0]);
+      setQuery('');
+      setError('');
+      setNote(
+        `${data.rows.length.toLocaleString()} rows imported. Your data stays in this browser tab.`
+      );
+    } catch (e) {
+      setError(e.message);
     }
   }
-  return arr;
-};`;
-
-  const cppCode = `#include <iostream>
-#include <vector>
-#include <string>
-using namespace std;
-
-struct User {
-    string firstName;
-    string lastName;
-    string email;
-    double weight; 
-    double height;
-    string country;
-};
-
-// Selection Sort for weight or height
-void selectionSort(vector<User> &arr, const string &key) {
-    for (int i = 0; i < (int)arr.size() - 1; i++) {
-        int minIndex = i;
-        for (int j = i + 1; j < (int)arr.size(); j++) {
-            double valJ = (key == "weight") ? arr[j].weight : arr[j].height;
-            double valMin = (key == "weight") ? arr[minIndex].weight : arr[minIndex].height;
-
-            if (valJ < valMin) {
-                minIndex = j;
-            }
-        }
-        if (minIndex != i) {
-            User temp = arr[i];
-            arr[i] = arr[minIndex];
-            arr[minIndex] = temp;
-        }
+  async function importFile(f) {
+    if (!f) return;
+    if (f.size > 5_000_000) {
+      setError('Choose a file below 5 MB.');
+      return;
     }
-}
-
-int main() {
-    // Example fake data
-    vector<User> users = {
-        {"John", "Doe", "john.doe@example.com", 75.0, 180.0, "USA"},
-        {"Jane", "Smith", "jane.smith@example.com", 62.0, 165.0, "UK"},
-        {"Michael", "Brown", "michael.brown@example.com", 90.0, 185.0, "Canada"},
-        {"Emily", "Johnson", "emily.johnson@example.com", 68.5, 158.0, "Australia"},
-        {"Daniel", "Lee", "daniel.lee@example.com", 85.2, 176.0, "Germany"}
-    };
-
-    // Sort by weight (change to "height" if needed)
-    selectionSort(users, "weight");
-
-    // Print sorted data
-    cout << "Sorted by weight:\\n";
-    for (auto &u : users) {
-        cout << u.firstName << " " << u.lastName
-             << ", Email: " << u.email
-             << ", Weight: " << u.weight
-             << ", Height: " << u.height
-             << ", Country: " << u.country << "\\n";
+    try {
+      apply(await f.text());
+    } catch {
+      setError('The file could not be read. Try CSV or JSON.');
     }
-
-    return 0;
-}
-`;
-
-  // -------------------------
-  // Render User Table
-  // -------------------------
-  const renderUserTable = (data) => {
-    return (
-      <div className="h-96 overflow-y-auto border rounded-lg">
-        <table className="min-w-full bg-white">
-          <thead className="bg-gray-200 sticky top-0">
-            <tr>
-              <th className="py-2 px-4 border-b">Name</th>
-              <th className="py-2 px-4 border-b">Email</th>
-              <th className="py-2 px-4 border-b">Weight (kg)</th>
-              <th className="py-2 px-4 border-b">Height (cm)</th>
-              <th className="py-2 px-4 border-b">Country</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((user, idx) => (
-              <tr key={idx} className="hover:bg-gray-100">
-                <td className="py-2 px-4 border-b">{user.firstName} {user.lastName}</td>
-                <td className="py-2 px-4 border-b">{user.email}</td>
-                <td className="py-2 px-4 border-b">{user.weight}</td>
-                <td className="py-2 px-4 border-b">{user.height}</td>
-                <td className="py-2 px-4 border-b">{user.address?.country || "N/A"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  }
+  function download(kind) {
+    const content =
+      kind === 'csv' ? toCSV(result.rows, dataset.columns) : JSON.stringify(result.rows, null, 2);
+    const url = URL.createObjectURL(
+      new Blob([content], { type: kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' })
     );
-  };
-
-  // -------------------------
-  // Component Render
-  // -------------------------
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rowcraft-export.${kind}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setNote(`${result.rows.length} rows exported as ${kind.toUpperCase()}.`);
+  }
+  function headerSort(c) {
+    if (c === key) setDirection(direction === 'asc' ? 'desc' : 'asc');
+    else {
+      setKey(c);
+      setDirection('asc');
+    }
+  }
   return (
-    <div className="min-h-screen bg-white text-black p-6">
-      {/* Header */}
-      <motion.div
-        className="text-center items-center flex flex-col justify-center mb-12 relative"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h1 className="text-4xl font-extrabold">Hashem Hasan Data Sorter</h1>
-
-        <div className="flex gap-4 mt-4">
-          {/* View JavaScript Code */}
-          <div
-            className="text-lg cursor-pointer relative underline"
-            onMouseEnter={() => setShowCodeTooltip("js")}
-            onMouseLeave={() => setShowCodeTooltip(null)}
-          >
-            <span>View JavaScript Code</span>
-            <AnimatePresence>
-              {showCodeTooltip === "js" && (
-                <motion.div
-                  className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-[600px] bg-gray-800 text-left text-white p-4 rounded-lg shadow-lg z-10"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <pre className="text-sm overflow-auto max-h-64">
-                    <code>{jsCode}</code>
-                  </pre>
-                </motion.div>
-              )}
-            </AnimatePresence>
+    <div className="container">
+      <nav className="nav" aria-label="Main">
+        <a href="#" className="brand">
+          <span className="brandmark">
+            <Icon name="sort" />
+          </span>
+          rowcraft<span className="version">/ 02</span>
+        </a>
+        <div className="navlinks">
+          <a href="#how">How it works</a>
+          <a href="https://github.com/Hashem-Hasan/Data-Sorter">
+            Source code <Icon size={15} />
+          </a>
+        </div>
+      </nav>
+      <main id="main">
+        <section className="hero">
+          <div>
+            <div className="eyebrow">
+              <span className="dot" /> A SMALL TOOL FOR BIG SPREADSHEETS
+            </div>
+            <h1>
+              Your data.
+              <br />
+              <span className="serif">In good order.</span>
+            </h1>
+            <p>
+              From a messy export to a useful dataset. Sort, search and tidy your CSV or JSON in one
+              quiet workspace.
+            </p>
           </div>
-
-          {/* View C++ Code */}
-          <div
-            className="text-lg cursor-pointer relative underline"
-            onMouseEnter={() => setShowCodeTooltip("cpp")}
-            onMouseLeave={() => setShowCodeTooltip(null)}
-          >
-            <span>View C++ Code</span>
-            <AnimatePresence>
-              {showCodeTooltip === "cpp" && (
-                <motion.div
-                  className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-[600px] bg-gray-800 text-left text-white p-4 rounded-lg shadow-lg z-10"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <pre className="text-sm overflow-auto max-h-64">
-                    <code>{cppCode}</code>
-                  </pre>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="hero-note">
+            <strong>Private by design.</strong>No uploads. No accounts. Everything happens in your
+            browser, and nothing is saved when you leave.
+          </div>
+        </section>
+        <div className="grid3 stats">
+          <div className="stat">
+            <span>ROWS IN YOUR DATASET</span>
+            <strong>
+              {dataset.rows.length.toLocaleString()}
+              <small> records</small>
+            </strong>
+          </div>
+          <div className="stat">
+            <span>COLUMNS DISCOVERED</span>
+            <strong>
+              {dataset.columns.length.toString().padStart(2, '0')}
+              <small> fields</small>
+            </strong>
+          </div>
+          <div className="stat">
+            <span>EMPTY CELLS</span>
+            <strong>
+              {blanks.toLocaleString()}
+              <small> to review</small>
+            </strong>
           </div>
         </div>
-      </motion.div>
-
-      {/* Main Content */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Editable Input */}
-        <motion.div
-          className="flex-1"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          viewport={{ once: true }}
-        >
-          <h2 className="text-2xl font-semibold mb-2">Input Data</h2>
-          {isLoading ? (
-            <p className="text-center text-gray-600">Loading data...</p>
-          ) : error ? (
-            <p className="text-center text-red-500">{error}</p>
-          ) : (
-            <textarea
-              className="w-full h-96 p-4 border rounded-lg resize-none bg-gray-50 text-black font-mono"
-              value={users}
-              onChange={(e) => setUsers(e.target.value)}
-              placeholder="Edit JSON data here..."
-            />
-          )}
-
-          <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
-            <label htmlFor="sortKey" className="text-lg font-medium">
-              Sort By:
-            </label>
-            <select
-              id="sortKey"
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value)}
-              className="p-2 border rounded-lg"
-            >
-              <option value="weight">Weight</option>
-              <option value="height">Height</option>
-            </select>
-            <button
-              onClick={handleSort}
-              disabled={isLoading || !!error}
-              className={`px-4 py-2 rounded-lg transition ${
-                isLoading || !!error
-                  ? "bg-blue-300 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 text-white"
-              }`}
-            >
-              Sort Data
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Sorted Output */}
-        <motion.div
-          className="flex-1"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          viewport={{ once: true }}
-        >
-          <h2 className="text-2xl font-semibold mb-2">Sorted Data</h2>
-          {sortedData.length > 0 ? (
-            renderUserTable(sortedData)
-          ) : (
-            <p className="text-gray-600">
-              No sorted data to display. Please sort the data.
-            </p>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Overweight Percentage and Chart */}
-      <AnimatePresence>
-        {showOverweight && (
-          <motion.div
-            className="mt-12 text-center"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.5 }}
-          >
-            <h2 className="text-2xl font-semibold mb-4">Overweight Percentage</h2>
-            <p className="text-xl font-medium mb-4">
-              {overweightPercentage}% of users are overweight (BMI ≥ 25)
-            </p>
-            <div className="max-w-md mx-auto">
-              <Bar
-                data={chartData}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: "top",
-                    },
-                    title: {
-                      display: true,
-                      text: "Overweight vs Normal",
-                    },
-                  },
-                }}
-              />
+        <div className="workspace">
+          <section className="panel" aria-labelledby="input-title">
+            <div className="panel-head">
+              <h2 id="input-title">
+                <span className="step">01</span> Start with your data
+              </h2>
+              <span className="badge">CSV / JSON</span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Full Documentation */}
-      <Documentation />
+            <div className="panel-body">
+              <div
+                className="dropzone"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  importFile(e.dataTransfer.files[0]);
+                }}
+              >
+                <Icon name="upload" size={23} />
+                <strong>Drop a file, or browse</strong>
+                <span>CSV or JSON · up to 5 MB / 5,000 rows</span>
+                <button onClick={() => file.current.click()} className="subtle">
+                  Choose file
+                </button>
+                <input
+                  ref={file}
+                  type="file"
+                  accept=".csv,.json,text/csv,application/json"
+                  className="sr-only"
+                  aria-label="Import CSV or JSON file"
+                  onChange={(e) => {
+                    importFile(e.target.files[0]);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+              <label htmlFor="source">
+                Or paste your data
+                <textarea
+                  id="source"
+                  spellCheck="false"
+                  className="mono data-editor"
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'input-error' : undefined}
+                />
+              </label>
+              {error && (
+                <div className="error" id="input-error" role="alert">
+                  {error}
+                </div>
+              )}
+              <div className="actions input-actions">
+                <button className="primary" onClick={() => apply()}>
+                  Apply data <Icon size={16} />
+                </button>
+                <button onClick={() => apply(JSON.stringify(SAMPLE, null, 2))}>Load example</button>
+              </div>
+            </div>
+          </section>
+          <section className="panel" aria-labelledby="output-title">
+            <div className="panel-head">
+              <h2 id="output-title">
+                <span className="step">02</span> Make it useful
+              </h2>
+              <span className="badge">
+                <span className="dot" /> Local workspace
+              </span>
+            </div>
+            <div className="panel-body">
+              <div className="toolbar">
+                <label>
+                  Sort column
+                  <select value={key} onChange={(e) => setKey(e.target.value)}>
+                    {dataset.columns.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Direction
+                  <select value={direction} onChange={(e) => setDirection(e.target.value)}>
+                    <option value="asc">Ascending ↑</option>
+                    <option value="desc">Descending ↓</option>
+                  </select>
+                </label>
+                <label>
+                  Algorithm
+                  <select value={algorithm} onChange={(e) => setAlgorithm(e.target.value)}>
+                    <option value="native">Native stable sort</option>
+                    <option value="selection">Selection sort · learn</option>
+                  </select>
+                </label>
+              </div>
+              <div className="filter-row">
+                <label className="search">
+                  <Icon name="search" size={17} />
+                  <input
+                    type="search"
+                    aria-label="Search all columns"
+                    placeholder="Search across all columns…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </label>
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={dedupe}
+                    onChange={(e) => setDedupe(e.target.checked)}
+                  />{' '}
+                  Remove duplicates
+                </label>
+              </div>
+            </div>
+            {result.error ? (
+              <div className="error" role="alert">
+                {result.error}
+              </div>
+            ) : (
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      {dataset.columns.map((c) => (
+                        <th
+                          scope="col"
+                          key={c}
+                          aria-sort={
+                            key === c ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'
+                          }
+                        >
+                          <button className="column-sort" onClick={() => headerSort(c)}>
+                            {c} {key === c ? (direction === 'asc' ? '↑' : '↓') : ''}
+                          </button>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.rows.slice(0, 250).map((r, i) => (
+                      <tr key={i}>
+                        <td className="row-num">{String(i + 1).padStart(2, '0')}</td>
+                        {dataset.columns.map((c) => (
+                          <td key={c} title={display(r[c])}>
+                            {display(r[c]) || <span className="muted">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!result.rows.length && (
+                  <div className="empty">No matching rows. Try another search.</div>
+                )}
+              </div>
+            )}
+            <div className="output-foot">
+              <span>
+                {result.rows.length} matching rows · {result.comparisons} comparisons
+                <br />
+                {result.rows.length > 250
+                  ? 'Preview shows 250; exports include every matching row.'
+                  : 'Stable order. Empty values stay at the end.'}
+              </span>
+              <div className="actions">
+                <button disabled={!result.rows.length} onClick={() => download('csv')}>
+                  <Icon name="download" size={16} /> CSV
+                </button>
+                <button disabled={!result.rows.length} onClick={() => download('json')}>
+                  JSON
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <p className="status-line small" role="status">
+          {note}
+        </p>
+        <section id="how" className="section">
+          <div className="section-title">
+            <h2>
+              Less wrangling.
+              <br />
+              More understanding.
+            </h2>
+            <p className="small">A practical workbench with a little computer science inside.</p>
+          </div>
+          <div className="grid3 explainer">
+            <article>
+              <span>01 / IMPORT</span>
+              <h3>Your format, your columns.</h3>
+              <p>
+                Quoted CSV fields, Unicode, mixed types and JSON objects. Columns are discovered
+                automatically; errors leave your last valid dataset intact.
+              </p>
+            </article>
+            <article>
+              <span>02 / TRANSFORM</span>
+              <h3>A predictable sort.</h3>
+              <p>
+                Numbers sort numerically, text sorts naturally, and equal values keep their order.
+                Selection-sort mode makes O(n²) comparisons visible, up to 500 rows.
+              </p>
+            </article>
+            <article>
+              <span>03 / TAKE IT WITH YOU</span>
+              <h3>Ready for the next step.</h3>
+              <p>
+                Export all matching rows as JSON or spreadsheet-ready CSV. Exports neutralize
+                leading formula characters; your original data is unchanged.
+              </p>
+            </article>
+          </div>
+        </section>
+      </main>
+      <footer className="footer">
+        <span>Rowcraft / Built by Hashem Hasan</span>
+        <a href="https://www.tarneebtech.com/">
+          More of my work <Icon size={14} />
+        </a>
+        <span>No data leaves this workspace.</span>
+      </footer>
     </div>
   );
 }
